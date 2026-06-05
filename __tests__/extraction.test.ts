@@ -103,6 +103,10 @@ describe('Language Detection', () => {
 
   it('should detect Keyman keyboard files', () => {
     expect(detectLanguage('khmer_angkor.kmn')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.keyman-touch-layout')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.kps')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.kvks')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.keyboard_info')).toBe('keyman');
   });
 
   it('should return unknown for unsupported extensions', () => {
@@ -753,6 +757,254 @@ group(g) using keys
     expect(result.nodes.find((n) => n.name === 'fake')).toBeUndefined();
     expect(result.nodes.find((n) => n.name === '&layer')).toBeUndefined();
     expect(result.nodes.find((n) => n.kind === 'variable' && n.name === 'real')).toBeDefined();
+  });
+
+  it('should emit cross-file references from &LAYOUTFILE / &VISUALKEYBOARD to companion files', () => {
+    const code = `store(&NAME) 'Khmer'
+store(&LAYOUTFILE) 'khmer.keyman-touch-layout'
+store(&VISUALKEYBOARD) 'khmer.kvks'
+store(&BITMAP) 'khmer.ico'
+begin Unicode > use(main)
+group(main) using keys
+  + 'a' > 'b'
+`;
+    const result = extractFromSource('release/k/khmer/source/khmer.kmn', code);
+    const refNames = result.unresolvedReferences
+      .filter((r) => r.referenceKind === 'references')
+      .map((r) => r.referenceName);
+    // Companion files are resolved against the .kmn's own directory (so the
+    // resolver's file-path matcher engages); icons are NOT linked.
+    expect(refNames).toContain('release/k/khmer/source/khmer.keyman-touch-layout');
+    expect(refNames).toContain('release/k/khmer/source/khmer.kvks');
+    expect(refNames.some((n) => n.endsWith('.ico'))).toBe(false);
+  });
+});
+
+describe('Keyman Touch Layout Extraction', () => {
+  const layout = JSON.stringify({
+    phone: {
+      font: 'Khmer',
+      layer: [
+        {
+          id: 'default',
+          row: [
+            { id: 1, key: [{ id: 'K_Q', text: 'q' }, { id: 'K_SHIFT', text: '*Shift*', nextlayer: 'shift' }] },
+          ],
+        },
+        {
+          id: 'shift',
+          row: [
+            { id: 1, key: [{ id: 'K_Q', text: 'Q', sk: [{ id: 'T_1', text: '@', nextlayer: 'symbol' }] }] },
+          ],
+        },
+        { id: 'symbol', row: [{ id: 1, key: [{ id: 'K_BKSP', text: '*BkSp*' }] }] },
+      ],
+    },
+    tablet: {
+      layer: [{ id: 'default', row: [{ id: 1, key: [{ id: 'K_A', text: 'a' }] }] }],
+    },
+  });
+
+  it('should detect keyman via extractFromSource for .keyman-touch-layout', () => {
+    const result = extractFromSource('khmer.keyman-touch-layout', layout);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    expect(result.nodes.find((n) => n.kind === 'file')?.language).toBe('keyman');
+  });
+
+  it('should emit a component node per layer, scoped by platform', () => {
+    const result = extractFromSource('khmer.keyman-touch-layout', layout);
+    const layers = result.nodes.filter((n) => n.kind === 'component');
+    // phone: default/shift/symbol + tablet: default
+    expect(layers.map((n) => n.qualifiedName).sort()).toEqual([
+      'khmer.keyman-touch-layout::phone:default',
+      'khmer.keyman-touch-layout::phone:shift',
+      'khmer.keyman-touch-layout::phone:symbol',
+      'khmer.keyman-touch-layout::tablet:default',
+    ]);
+    expect(layers.find((n) => n.qualifiedName.endsWith('phone:default'))?.name).toBe('default');
+  });
+
+  it('should link layers via nextlayer (including subkeys), within the same platform', () => {
+    const result = extractFromSource('khmer.keyman-touch-layout', layout);
+    const byId = new Map(result.nodes.map((n) => [n.id, n]));
+    const refs = result.edges
+      .filter((e) => e.kind === 'references')
+      .map((e) => `${byId.get(e.source)?.qualifiedName}->${byId.get(e.target)?.qualifiedName}`)
+      .sort();
+    expect(refs).toContain('khmer.keyman-touch-layout::phone:default->khmer.keyman-touch-layout::phone:shift');
+    // sk[].nextlayer is followed too
+    expect(refs).toContain('khmer.keyman-touch-layout::phone:shift->khmer.keyman-touch-layout::phone:symbol');
+  });
+
+  it('should not throw on malformed JSON, reporting a parse error instead', () => {
+    const result = extractFromSource('bad.keyman-touch-layout', '{ not json');
+    expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
+    expect(result.errors.some((e) => e.severity === 'error')).toBe(true);
+  });
+});
+
+describe('Keyman Package (.kps) Extraction', () => {
+  const kps = `<?xml version="1.0" encoding="utf-8"?>
+<Package>
+  <Info>
+    <Name URL="">Khmer Angkor</Name>
+    <Author URL="mailto:a@b.org">Someone</Author>
+  </Info>
+  <Files>
+    <File><Name>..\\build\\khmer.js</Name><FileType>.js</FileType></File>
+    <File><Name>khmer.keyman-touch-layout</Name><FileType>.keyman-touch-layout</FileType></File>
+    <File><Name>..\\..\\shared\\fonts\\Foo.ttf</Name><FileType>.ttf</FileType></File>
+  </Files>
+  <Keyboards>
+    <Keyboard>
+      <ID>khmer</ID>
+      <Languages><Language ID="km">Khmer</Language></Languages>
+    </Keyboard>
+  </Keyboards>
+  <RelatedPackages>
+    <RelatedPackage ID="khmer10" Relationship="deprecates"/>
+    <RelatedPackage ID="khmer_mondulkiri"/>
+    <RelatedPackage ID="khmer"/>
+  </RelatedPackages>
+</Package>`;
+
+  it('should detect keyman and capture the package name as docstring', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    const file = result.nodes.find((n) => n.kind === 'file');
+    expect(file?.language).toBe('keyman');
+    expect(file?.docstring).toBe('Khmer Angkor');
+  });
+
+  it('should link the package to its keyboard .kmn and shipped source companions', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    const refNames = result.unresolvedReferences.map((r) => r.referenceName).sort();
+    // Keyboard <ID> → its .kmn, resolved against the .kps directory.
+    expect(refNames).toContain('release/k/khmer/source/khmer.kmn');
+    // Shipped keyboard-source companion is linked; build outputs and fonts are not.
+    expect(refNames).toContain('release/k/khmer/source/khmer.keyman-touch-layout');
+    expect(refNames.some((n) => n.endsWith('.js'))).toBe(false);
+    expect(refNames.some((n) => n.endsWith('.ttf'))).toBe(false);
+  });
+
+  it('should emit a language node per <Language ID> with the display name searchable', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    const langs = result.nodes.filter((n) => n.kind === 'constant');
+    expect(langs.map((n) => n.name)).toEqual(['km']);
+    expect(langs[0]?.signature).toContain('Khmer');
+    // file → language contains edge
+    const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
+    expect(result.edges.some((e) => e.kind === 'contains' && e.source === fileId && e.target === langs[0]!.id)).toBe(true);
+  });
+
+  it('should reference related packages by basename (.kps and legacy .keyboard_info), never itself', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    const refNames = result.unresolvedReferences.map((r) => r.referenceName);
+    // Each related id is referenced as both a .kps and a legacy .keyboard_info,
+    // so it resolves whichever lineage the target keyboard belongs to.
+    expect(refNames).toContain('khmer10.kps');
+    expect(refNames).toContain('khmer10.keyboard_info');
+    expect(refNames).toContain('khmer_mondulkiri.kps');
+    expect(refNames).toContain('khmer_mondulkiri.keyboard_info');
+    // <RelatedPackage ID="khmer"> would point at this very package — skipped.
+    expect(refNames).not.toContain('khmer.kps');
+    expect(refNames).not.toContain('khmer.keyboard_info');
+  });
+});
+
+describe('Keyman Visual Keyboard (.kvks) Extraction', () => {
+  const kvks = `<?xml version="1.0" encoding="utf-8"?>
+<visualkeyboard>
+  <header>
+    <version>10.0</version>
+    <kbdname>khmer_angkor</kbdname>
+    <flags><usealtgr/></flags>
+  </header>
+  <encoding name="unicode" fontname="Busra" fontsize="12">
+    <layer shift="">
+      <key vkey="K_B">ខ</key>
+      <key vkey="K_K">គ</key>
+    </layer>
+    <layer shift="S">
+      <key vkey="K_B">ឃ</key>
+    </layer>
+    <layer shift="RA">
+      <key vkey="K_B">ឞ</key>
+    </layer>
+    <layer shift="SRA">
+      <key vkey="K_B">ៜ</key>
+    </layer>
+  </encoding>
+</visualkeyboard>`;
+
+  it('should detect keyman and capture kbdname as docstring', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kvks', kvks);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    const file = result.nodes.find((n) => n.kind === 'file');
+    expect(file?.language).toBe('keyman');
+    expect(file?.docstring).toBe('khmer_angkor');
+  });
+
+  it('should emit a component node per layer with a decoded modifier label', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kvks', kvks);
+    const layers = result.nodes.filter((n) => n.kind === 'component');
+    // shift="" → default, S → shift, RA → rightalt, SRA → shift+rightalt
+    expect(layers.map((n) => n.name).sort()).toEqual(['default', 'rightalt', 'shift', 'shift+rightalt']);
+    expect(layers.every((n) => n.qualifiedName.includes('::unicode:'))).toBe(true);
+    // file → layer contains edges, no inter-layer edges (desktop has no switches)
+    const byId = new Map(result.nodes.map((n) => [n.id, n]));
+    const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
+    expect(result.edges.filter((e) => e.kind === 'contains' && e.source === fileId)).toHaveLength(4);
+    expect(result.edges.some((e) => byId.get(e.source)?.kind === 'component')).toBe(false);
+  });
+
+  it('should not throw on malformed XML, returning at least a file node', () => {
+    const result = extractFromSource('bad.kvks', '<visualkeyboard><encoding');
+    expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+  });
+});
+
+describe('Keyman Keyboard Info (.keyboard_info) Extraction', () => {
+  const info = JSON.stringify({
+    id: 'blackfoot_syllabics_u',
+    name: 'Blackfoot Syllabics',
+    languages: {
+      alq: { displayName: 'Algonquin', languageName: 'Algonquin' },
+      bla: { displayName: 'Siksika', languageName: 'Siksika' },
+    },
+  });
+
+  it('should detect keyman and capture the display name as docstring', () => {
+    const result = extractFromSource('legacy/b/blackfoot/blackfoot.keyboard_info', info);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    const file = result.nodes.find((n) => n.kind === 'file');
+    expect(file?.language).toBe('keyman');
+    expect(file?.docstring).toBe('Blackfoot Syllabics');
+  });
+
+  it('should emit a language node per supported language, matching the .kps shape', () => {
+    const result = extractFromSource('legacy/b/blackfoot/blackfoot.keyboard_info', info);
+    const langs = result.nodes.filter((n) => n.kind === 'constant');
+    expect(langs.map((n) => n.name).sort()).toEqual(['alq', 'bla']);
+    expect(langs.find((n) => n.name === 'bla')?.signature).toContain('Siksika');
+    const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
+    expect(result.edges.filter((e) => e.kind === 'contains' && e.source === fileId)).toHaveLength(2);
+  });
+
+  it('should handle the empty-languages and bare-array shapes without error', () => {
+    const empty = extractFromSource('a.keyboard_info', JSON.stringify({ name: 'A', languages: {} }));
+    expect(empty.nodes.filter((n) => n.kind === 'constant')).toHaveLength(0);
+    expect(empty.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+
+    const arr = extractFromSource('b.keyboard_info', JSON.stringify({ name: 'B', languages: ['en', 'fr'] }));
+    expect(arr.nodes.filter((n) => n.kind === 'constant').map((n) => n.name).sort()).toEqual(['en', 'fr']);
+  });
+
+  it('should report a parse error on malformed JSON', () => {
+    const result = extractFromSource('bad.keyboard_info', '{ not json');
+    expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
+    expect(result.errors.some((e) => e.severity === 'error')).toBe(true);
   });
 });
 
