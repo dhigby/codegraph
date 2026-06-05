@@ -26,6 +26,10 @@ import { buildLanguageNode } from './keyman-shared';
  *     (`.kmn` / `.keyman-touch-layout` / `.kvks`). Build outputs, fonts, and
  *     docs are skipped — they aren't indexed, so a reference would never
  *     resolve.
+ *   - `references` (unresolved) to each related package (`<RelatedPackages>
+ *     <RelatedPackage ID="…">`) — by basename, since the target is in another
+ *     directory; resolves to the related keyboard's `.kps` or legacy
+ *     `.keyboard_info` by exact-name.
  */
 
 /** Companion source extensions worth linking from a package's <Files> list. */
@@ -83,6 +87,29 @@ export class KeymanKpsExtractor {
           if (!name || !LINKABLE_EXT.test(name)) continue;
           const abs = filesBlock.offset + m.index;
           this.addRef(fileNode.id, resolvePackagePath(this.filePath, name), abs);
+        }
+      }
+
+      // Related packages → the package they reference by id. The target lives in
+      // another directory, so we can't build a path — but a package id equals
+      // its file's basename stem, so we reference `<id>.kps` (release/
+      // experimental) AND `<id>.keyboard_info` (legacy, which has no `.kps`).
+      // Whichever exists resolves by exact-name; the other and fully-external
+      // ids drop harmlessly. (Most related packages are the legacy keyboard a
+      // newer one deprecates, so the `.keyboard_info` arm matters most.)
+      const relatedBlock = findBlock(this.source, 'RelatedPackages');
+      if (relatedBlock) {
+        // This package's own id is its filename stem; skip a self-referential
+        // related id (would otherwise link the package to itself).
+        const selfStem = (this.filePath.split(/[\\/]/).pop() || '').replace(/\.[^.]*$/, '').toLowerCase();
+        const re = /<RelatedPackage\b[^>]*\bID\s*=\s*"([^"]+)"/gi;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(relatedBlock.content)) !== null) {
+          const id = m[1]!.trim();
+          if (!id || id.toLowerCase() === selfStem) continue;
+          const abs = relatedBlock.offset + m.index;
+          this.addRef(fileNode.id, `${id}.kps`, abs);
+          this.addRef(fileNode.id, `${id}.keyboard_info`, abs);
         }
       }
     } catch (error) {

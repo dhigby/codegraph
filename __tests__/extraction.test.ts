@@ -861,6 +861,11 @@ describe('Keyman Package (.kps) Extraction', () => {
       <Languages><Language ID="km">Khmer</Language></Languages>
     </Keyboard>
   </Keyboards>
+  <RelatedPackages>
+    <RelatedPackage ID="khmer10" Relationship="deprecates"/>
+    <RelatedPackage ID="khmer_mondulkiri"/>
+    <RelatedPackage ID="khmer"/>
+  </RelatedPackages>
 </Package>`;
 
   it('should detect keyman and capture the package name as docstring', () => {
@@ -890,6 +895,20 @@ describe('Keyman Package (.kps) Extraction', () => {
     // file → language contains edge
     const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
     expect(result.edges.some((e) => e.kind === 'contains' && e.source === fileId && e.target === langs[0]!.id)).toBe(true);
+  });
+
+  it('should reference related packages by basename (.kps and legacy .keyboard_info), never itself', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    const refNames = result.unresolvedReferences.map((r) => r.referenceName);
+    // Each related id is referenced as both a .kps and a legacy .keyboard_info,
+    // so it resolves whichever lineage the target keyboard belongs to.
+    expect(refNames).toContain('khmer10.kps');
+    expect(refNames).toContain('khmer10.keyboard_info');
+    expect(refNames).toContain('khmer_mondulkiri.kps');
+    expect(refNames).toContain('khmer_mondulkiri.keyboard_info');
+    // <RelatedPackage ID="khmer"> would point at this very package — skipped.
+    expect(refNames).not.toContain('khmer.kps');
+    expect(refNames).not.toContain('khmer.keyboard_info');
   });
 });
 

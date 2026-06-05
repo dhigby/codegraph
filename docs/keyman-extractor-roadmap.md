@@ -20,8 +20,9 @@ language token (dispatched by extension in `src/extraction/tree-sitter.ts`):
   the package display name as docstring, cross-file `references` to each
   `<Keyboard><ID>`'s `.kmn` source plus any shipped keyboard-source companion
   (`.kmn` / `.keyman-touch-layout` / `.kvks`; build outputs, fonts, and docs are
-  skipped), and a `constant` node per supported language from `<Languages>
-  <Language ID="…">`.
+  skipped), a `constant` node per supported language from `<Languages>
+  <Language ID="…">`, and cross-package `references` to each `<RelatedPackage>`
+  (by basename, resolving to a release `.kps` or a legacy `.keyboard_info`).
 - **`.kvks`** (`keyman-kvks-extractor.ts`) — the on-screen (desktop) visual
   keyboard. File node (docstring = `<kbdname>`) and a `component` node per
   layer, scoped by encoding and decoded modifier state (`shift="RA"` →
@@ -49,7 +50,7 @@ Counts from a scan of `keymanapp/keyboards` (`release` + `legacy` + `experimenta
 | Ext | Count | Format | Extractor candidate? | What it would add |
 |---|---|---|---|---|
 | `.kmn` | 1034 | text DSL | ✅ **done** | groups, stores, call/reference edges, + companion-file cross-links |
-| `.kps` | 1055 | XML | ✅ **done** | package manifest — links the package to its keyboard `.kmn` (via `<Keyboard><ID>`) and shipped source companions |
+| `.kps` | 1055 | XML | ✅ **done** | package manifest — links the package to its keyboard `.kmn` (via `<Keyboard><ID>`), shipped source companions, supported languages, and related packages |
 | `.keyman-touch-layout` | 952 | JSON | ✅ **done** | touch/mobile layout — `component` node per layer + `nextlayer` layer-transition edges |
 | `.kvks` | 947 | XML | ✅ **done** | on-screen (desktop) visual keyboard — file node + `component` node per modifier layer; lights up the `&VISUALKEYBOARD → .kvks` link from the `.kmn` |
 | `.kpj` | 1034 | XML | 🔸 low | project file — but modern ones are nearly empty (auto-discover files), so little to extract |
@@ -90,13 +91,18 @@ each one.
 4. ✅ **`.kvks`** (XML visual keyboard) — file node + per-modifier layer nodes.
 5. ✅ **`.keyboard_info`** (JSON catalog metadata) — language coverage for legacy keyboards.
 
-All Keyman source formats present in the repo are now covered.
+All Keyman source formats present in the repo are now covered, and packages are
+cross-linked to each other via `<RelatedPackages>` (a related id is referenced
+by basename as both `<id>.kps` and `<id>.keyboard_info`, so it resolves whether
+the target is a release/experimental keyboard or a legacy one — most are the
+legacy keyboard a newer one deprecates).
 
-### Remaining work
+### Possible future work
 
-- **`.kps` RelatedPackages** — `<RelatedPackage ID="…">` links one package to
-  another by id. Not yet linked (the target lives in a different directory, so
-  there's no path to resolve against); would need a package-id → `.kps` index.
+- **`<RelatedPackage Relationship="…">`** — the relationship kind (`deprecates`,
+  etc.) isn't preserved: an `UnresolvedReference` carries no metadata, so every
+  related-package link lands as a plain `references` edge. Encoding the
+  relationship would need a metadata channel on unresolved refs.
 
 ## How to add one (pattern)
 
