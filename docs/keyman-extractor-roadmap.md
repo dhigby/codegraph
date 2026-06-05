@@ -21,11 +21,15 @@ language token (dispatched by extension in `src/extraction/tree-sitter.ts`):
   `<Keyboard><ID>`'s `.kmn` source plus any shipped keyboard-source companion
   (`.kmn` / `.keyman-touch-layout` / `.kvks`); build outputs, fonts, and docs
   are skipped (never indexed, so they'd never resolve).
+- **`.kvks`** (`keyman-kvks-extractor.ts`) — the on-screen (desktop) visual
+  keyboard. File node (docstring = `<kbdname>`) and a `component` node per
+  layer, scoped by encoding and decoded modifier state (`shift="RA"` →
+  `rightalt`, `SRA` → `shift+rightalt`). No inter-layer edges (desktop modifier
+  states aren't programmatic switches). Keys stay data, not nodes.
 
-Together these connect `.kps → .kmn → touch-layout` into one navigable
-subgraph (validated end-to-end on `khmer_angkor` and `baybayin`). The
-`&VISUALKEYBOARD → .kvks` reference is emitted but only resolves once `.kvks`
-is itself indexed (see remaining work below).
+Together these connect `.kps → .kmn → {touch-layout, visual-keyboard}` into one
+navigable subgraph (validated end-to-end on `khmer_angkor` and `baybayin`:
+`.kps → .kmn`, and `.kmn → .keyman-touch-layout` / `.kmn → .kvks` all resolve).
 
 ## Keyman source formats present in the keyboards repo
 
@@ -36,7 +40,7 @@ Counts from a scan of `keymanapp/keyboards` (`release` + `legacy` + `experimenta
 | `.kmn` | 1034 | text DSL | ✅ **done** | groups, stores, call/reference edges, + companion-file cross-links |
 | `.kps` | 1055 | XML | ✅ **done** | package manifest — links the package to its keyboard `.kmn` (via `<Keyboard><ID>`) and shipped source companions |
 | `.keyman-touch-layout` | 952 | JSON | ✅ **done** | touch/mobile layout — `component` node per layer + `nextlayer` layer-transition edges |
-| `.kvks` | 947 | XML | 🔸 medium | on-screen (desktop) visual keyboard — key→output map. Mostly data; completes the picture (would also light up the emitted `&VISUALKEYBOARD → .kvks` reference) |
+| `.kvks` | 947 | XML | ✅ **done** | on-screen (desktop) visual keyboard — file node + `component` node per modifier layer; lights up the `&VISUALKEYBOARD → .kvks` link from the `.kmn` |
 | `.kpj` | 1034 | XML | 🔸 low | project file — but modern ones are nearly empty (auto-discover files), so little to extract |
 | `.keyboard_info` | 555 | JSON | 🔸 low | catalog metadata (languages, author, version). Easy but low graph value |
 | `.xml` (LDML) | ~2 | XML | ❌ skip | the new CLDR keyboard standard — a genuine alt source language, but only ~2 in the repo; not worth it |
@@ -72,13 +76,13 @@ each one.
 1. ✅ **`.kmn` cross-file edges** (enhance existing extractor) — biggest value, smallest effort.
 2. ✅ **`.keyman-touch-layout`** (JSON) — layer nodes + `nextlayer` transitions.
 3. ✅ **`.kps`** (XML manifest) — the connective tissue between a keyboard's files.
-4. `.kvks` / `.keyboard_info` — nice-to-have, lower value. **Remaining.**
+4. ✅ **`.kvks`** (XML visual keyboard) — file node + per-modifier layer nodes.
+
+`.keyboard_info` (catalog metadata) is the only remaining candidate, and it's
+low value. The four core source formats are now covered.
 
 ### Remaining work
 
-- **`.kvks`** (visual keyboard, XML) — index as a file (+ optionally a key→output
-  map). Indexing it also lights up the `&VISUALKEYBOARD → .kvks` reference the
-  `.kmn` extractor already emits.
 - **`.keyboard_info`** (JSON catalog metadata) — low graph value.
 - **`.kps` RelatedPackages** — `<RelatedPackage ID="…">` links one package to
   another by id. Not yet linked (the target lives in a different directory, so

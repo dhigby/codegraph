@@ -104,11 +104,13 @@ export const EXTENSION_MAP: Record<string, Language> = {
   // Keyman keyboard formats (SIL). Custom extractors (no tree-sitter grammar
   // exists), dispatched by extension in tree-sitter.ts: keyboard rules
   // (keyman-extractor.ts), touch/mobile layout JSON
-  // (keyman-touch-layout-extractor.ts), and package manifest XML
-  // (keyman-kps-extractor.ts).
+  // (keyman-touch-layout-extractor.ts), package manifest XML
+  // (keyman-kps-extractor.ts), and visual keyboard XML
+  // (keyman-kvks-extractor.ts).
   '.kmn': 'keyman',
   '.keyman-touch-layout': 'keyman',
   '.kps': 'keyman',
+  '.kvks': 'keyman',
   // XML: file-level tracking; the MyBatis extractor matches `<mapper namespace="...">`
   // shape and emits SQL-statement nodes (other XML returns empty).
   '.xml': 'xml',

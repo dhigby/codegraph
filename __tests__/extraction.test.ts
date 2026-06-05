@@ -105,6 +105,7 @@ describe('Language Detection', () => {
     expect(detectLanguage('khmer_angkor.kmn')).toBe('keyman');
     expect(detectLanguage('khmer_angkor.keyman-touch-layout')).toBe('keyman');
     expect(detectLanguage('khmer_angkor.kps')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.kvks')).toBe('keyman');
   });
 
   it('should return unknown for unsupported extensions', () => {
@@ -878,6 +879,59 @@ describe('Keyman Package (.kps) Extraction', () => {
     expect(refNames).toContain('release/k/khmer/source/khmer.keyman-touch-layout');
     expect(refNames.some((n) => n.endsWith('.js'))).toBe(false);
     expect(refNames.some((n) => n.endsWith('.ttf'))).toBe(false);
+  });
+});
+
+describe('Keyman Visual Keyboard (.kvks) Extraction', () => {
+  const kvks = `<?xml version="1.0" encoding="utf-8"?>
+<visualkeyboard>
+  <header>
+    <version>10.0</version>
+    <kbdname>khmer_angkor</kbdname>
+    <flags><usealtgr/></flags>
+  </header>
+  <encoding name="unicode" fontname="Busra" fontsize="12">
+    <layer shift="">
+      <key vkey="K_B">ខ</key>
+      <key vkey="K_K">គ</key>
+    </layer>
+    <layer shift="S">
+      <key vkey="K_B">ឃ</key>
+    </layer>
+    <layer shift="RA">
+      <key vkey="K_B">ឞ</key>
+    </layer>
+    <layer shift="SRA">
+      <key vkey="K_B">ៜ</key>
+    </layer>
+  </encoding>
+</visualkeyboard>`;
+
+  it('should detect keyman and capture kbdname as docstring', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kvks', kvks);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    const file = result.nodes.find((n) => n.kind === 'file');
+    expect(file?.language).toBe('keyman');
+    expect(file?.docstring).toBe('khmer_angkor');
+  });
+
+  it('should emit a component node per layer with a decoded modifier label', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kvks', kvks);
+    const layers = result.nodes.filter((n) => n.kind === 'component');
+    // shift="" → default, S → shift, RA → rightalt, SRA → shift+rightalt
+    expect(layers.map((n) => n.name).sort()).toEqual(['default', 'rightalt', 'shift', 'shift+rightalt']);
+    expect(layers.every((n) => n.qualifiedName.includes('::unicode:'))).toBe(true);
+    // file → layer contains edges, no inter-layer edges (desktop has no switches)
+    const byId = new Map(result.nodes.map((n) => [n.id, n]));
+    const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
+    expect(result.edges.filter((e) => e.kind === 'contains' && e.source === fileId)).toHaveLength(4);
+    expect(result.edges.some((e) => byId.get(e.source)?.kind === 'component')).toBe(false);
+  });
+
+  it('should not throw on malformed XML, returning at least a file node', () => {
+    const result = extractFromSource('bad.kvks', '<visualkeyboard><encoding');
+    expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
   });
 });
 
