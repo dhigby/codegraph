@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"console.log\\(require.resolve\\('tree-sitter-wasms/package.json'\\)\\)\")",
+      "Bash(npm search *)",
+      "Bash(npm view *)",
+      "Bash(npx ctx7@latest library \"Keyman\" \"Keyman keyboard language .kmn syntax: store, group, begin, rules, use\")",
+      "Bash(npx ctx7@latest docs /keymanapp/keyman \"kmn keyboard language reference: store\\(\\) statement, group\\(\\) with using keys and readonly, begin Unicode use\\(\\), rule syntax + > output, context, deadkey, system stores &NAME &VERSION &TARGETS\")",
+      "Bash(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' npx ctx7@latest docs /keymanapp/keyman \"kmn keyboard language reference: store\\(\\) statement, group\\(\\) using keys readonly, begin Unicode use\\(\\), rule syntax with > output and context, deadkey, system stores &NAME &VERSION &TARGETS\")",
+      "Bash(npm ci *)",
+      "Bash(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' npx ctx7@latest docs /keymanapp/keyman \"keyboard language statements reference: use match nomatch context return any notany index outs deadkey dk set if save reset call layer platform beep nul; comment with c; group using keys vs readonly; multi-line continuation backslash\")",
+      "Bash(grep -rn '\\\\*\\\\*/\\\\*\\\\.' src/)",
+      "Bash(npm run *)",
+      "Bash(npm link *)",
+      "Bash(codegraph --version)",
+      "Bash(node scripts/add-lang/verify-extraction.mjs /tmp/keyman-sample keyman)",
+      "Bash(codegraph status *)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const s=JSON.parse\\(d\\);console.log\\('files',s.fileCount,'nodes',s.nodeCount,'edges',s.edgeCount\\);console.log\\('langs',JSON.stringify\\(s.languages\\)\\);console.log\\('byKind',JSON.stringify\\(s.nodesByKind\\)\\);}\\)\")",
+      "Bash(npx vitest *)",
+      "Bash(ls C:/dev/keyboards/ 2>&1 | head -20; echo '--- .kmn count ---'; find C:/dev/keyboards -name '*.kmn' 2>/dev/null | wc -l; echo '--- size of a release subtree ---'; du -sh C:/dev/keyboards/release 2>/dev/null | head -1)",
+      "Read(//c/dev/keyboards/**)",
+      "Bash(echo \"large .kmn: $\\(find /tmp/kmn-large -name '*.kmn' 2>/dev/null | wc -l\\)  size: $\\(du -sh /tmp/kmn-large 2>/dev/null | cut -f1\\)\"; echo \"medium .kmn: $\\(find /tmp/kmn-medium -name '*.kmn' 2>/dev/null | wc -l\\)  size: $\\(du -sh /tmp/kmn-medium 2>/dev/null | cut -f1\\)\")",
+      "Read(//tmp/**)",
+      "Bash(codegraph query *)",
+      "Bash(echo \"=== exit $? ===\")",
+      "Bash(codegraph context *)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const s=JSON.parse\\(d\\);console.log\\('files',s.fileCount,'nodes',s.nodeCount\\);console.log\\('languages:',JSON.stringify\\(s.languages\\)\\);console.log\\('byKind:',JSON.stringify\\(s.nodesByKind\\)\\);}\\)\")",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '\\\\''codegraph'\\\\'' } | Select-Object ProcessId, @{n='\\\\''Cmd'\\\\'';e={$_.CommandLine.Substring\\(0,[Math]::Min\\(120,$_.CommandLine.Length\\)\\)}} | Format-Table -AutoSize -Wrap')",
+      "Bash(where.exe codegraph *)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
