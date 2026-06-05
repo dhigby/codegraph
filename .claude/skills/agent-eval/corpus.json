@@ -94,5 +94,9 @@
     { "name": "react-native-segmented-control", "repo": "https://github.com/react-native-segmented-control/segmented-control", "size": "Small", "files": "~25", "question": "How does JSX `<SegmentedControl onChange={cb}/>` reach the native onChange handler on iOS/Android?" },
     { "name": "react-native-screens", "repo": "https://github.com/software-mansion/react-native-screens", "size": "Medium", "files": "~1200", "question": "How does JSX `<ScreenStack>` reach the native RNSScreenStackView component?" },
     { "name": "react-native-skia", "repo": "https://github.com/Shopify/react-native-skia", "size": "Large", "files": "~1000", "question": "How does a `<SkiaPictureView/>` JSX usage reach the iOS / Android native renderer?" }
+  ],
+  "Keyman": [
+    { "name": "mon-keyman", "repo": "https://github.com/Anontamon/Mon-Keyman-Keyboard", "size": "Small", "files": "~4", "question": "How does a keystroke flow from the begin statement through the keyboard's groups, and which stores does the main group consume?" },
+    { "name": "keyman-keyboards", "repo": "https://github.com/keymanapp/keyboards", "size": "Large", "files": "~1030 .kmn", "question": "In the khmer_angkor keyboard, how does a keystroke flow from the begin entry through its groups (PostKeystroke, detectStartOfSentence, main, normalise), and which stores drive the consonant/vowel reordering?" }
   ]
 }

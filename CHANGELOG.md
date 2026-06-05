@@ -11,6 +11,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### New Features
 
+- CodeGraph now indexes **Keyman** keyboard source (`.kmn`) — groups become callable units, user and system stores become symbols, and `use(...)` calls plus `outs`/`any`/`index` store references are wired into the graph, so you can trace how a keystroke flows through a keyboard's groups and which stores each group consumes.
 - `codegraph status --json` now also reports the running CLI `version`, the index directory (`indexPath`), and a `lastIndexed` timestamp (ISO-8601, or null when nothing's indexed yet), so CI and scripts can pin the CLI version and check index freshness from a single command. A matching `CodeGraph.getLastIndexedAt()` library method exposes the same freshness check without shelling out. Thanks @12122J and @eddieran. (#329)
 
 ### Fixes

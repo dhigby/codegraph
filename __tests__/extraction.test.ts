@@ -101,6 +101,10 @@ describe('Language Detection', () => {
     expect(detectLanguage('stdio.h', '#ifndef STDIO_H\nvoid printf();\n#endif\n')).toBe('c');
   });
 
+  it('should detect Keyman keyboard files', () => {
+    expect(detectLanguage('khmer_angkor.kmn')).toBe('keyman');
+  });
+
   it('should return unknown for unsupported extensions', () => {
     expect(detectLanguage('styles.css')).toBe('unknown');
     expect(detectLanguage('data.json')).toBe('unknown');
@@ -656,6 +660,99 @@ func (s *Service) GetUser(id string) (*User, error) {
     const methodNode = result.nodes.find((n) => n.kind === 'method');
     expect(methodNode).toBeDefined();
     expect(methodNode?.name).toBe('GetUser');
+  });
+});
+
+describe('Keyman Extraction', () => {
+  const kbd = `c Sample Keyman keyboard
+store(&NAME) 'Sample Keyboard'
+store(&VERSION) '10.0'
+store(&TARGETS) 'any'
+
+c user stores
+store(consonants) 'kgcj'
+store(vowels) 'aeiou'
+store(combined) outs(consonants) outs(vowels)
+
+begin Unicode > use(main)
+
+group(main) using keys
+  c a rule that calls another group
+  + any(consonants) > use(output)
+  + 'x' > 'y'
+
+group(output)
+  any(vowels) + 'z' > index(vowels, 1) \\
+                      outs(combined)
+  nomatch > use(main)
+`;
+
+  it('should detect keyman via extractFromSource', () => {
+    const result = extractFromSource('sample.kmn', kbd);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    expect(result.nodes.find((n) => n.kind === 'file')?.language).toBe('keyman');
+  });
+
+  it('should extract groups as function nodes', () => {
+    const result = extractFromSource('sample.kmn', kbd);
+    const groups = result.nodes.filter((n) => n.kind === 'function').map((n) => n.name).sort();
+    expect(groups).toEqual(['main', 'output']);
+    const main = result.nodes.find((n) => n.kind === 'function' && n.name === 'main');
+    expect(main?.signature).toBe('group(main) using keys');
+  });
+
+  it('should extract user stores as variables and system stores as constants', () => {
+    const result = extractFromSource('sample.kmn', kbd);
+    const variables = result.nodes.filter((n) => n.kind === 'variable').map((n) => n.name).sort();
+    expect(variables).toEqual(['combined', 'consonants', 'vowels']);
+    const constants = result.nodes.filter((n) => n.kind === 'constant').map((n) => n.name).sort();
+    expect(constants).toEqual(['&NAME', '&TARGETS', '&VERSION']);
+  });
+
+  it('should capture the keyboard name as the file docstring', () => {
+    const result = extractFromSource('sample.kmn', kbd);
+    expect(result.nodes.find((n) => n.kind === 'file')?.docstring).toBe('Sample Keyboard');
+  });
+
+  it('should resolve use() into calls edges, including the begin entry point', () => {
+    const result = extractFromSource('sample.kmn', kbd);
+    const byId = new Map(result.nodes.map((n) => [n.id, n]));
+    const calls = result.edges
+      .filter((e) => e.kind === 'calls')
+      .map((e) => `${byId.get(e.source)?.name}->${byId.get(e.target)?.name}`)
+      .sort();
+    // begin Unicode > use(main); main calls output; output's nomatch calls main
+    expect(calls).toContain('sample.kmn->main');
+    expect(calls).toContain('main->output');
+    expect(calls).toContain('output->main');
+  });
+
+  it('should resolve outs()/any()/index() into references edges (group→store and store→store)', () => {
+    const result = extractFromSource('sample.kmn', kbd);
+    const byId = new Map(result.nodes.map((n) => [n.id, n]));
+    const refs = result.edges
+      .filter((e) => e.kind === 'references')
+      .map((e) => `${byId.get(e.source)?.name}->${byId.get(e.target)?.name}`);
+    // store(combined) outs(consonants) outs(vowels) — store→store composition
+    expect(refs).toContain('combined->consonants');
+    expect(refs).toContain('combined->vowels');
+    // group(main) matches any(consonants); group(output) uses vowels/combined
+    expect(refs).toContain('main->consonants');
+    expect(refs).toContain('output->vowels');
+    expect(refs).toContain('output->combined');
+  });
+
+  it('should not extract symbols from comments or built-in system stores', () => {
+    const code = `c this comment mentions store(fake) and use(ghost)
+store(real) 'data'
+group(g) using keys
+  if(&layer = 'shift') any(real) > context
+`;
+    const result = extractFromSource('cmt.kmn', code);
+    // 'fake' is only inside a comment; '&layer' is a built-in (never defined)
+    expect(result.nodes.find((n) => n.name === 'fake')).toBeUndefined();
+    expect(result.nodes.find((n) => n.name === '&layer')).toBeUndefined();
+    expect(result.nodes.find((n) => n.kind === 'variable' && n.name === 'real')).toBeDefined();
   });
 });
 
