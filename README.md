@@ -1,4 +1,4 @@
-> **🔱 Fork notice — adds Keyman support.** This is a personal fork of [CodeGraph](https://github.com/colbymchenry/codegraph) that adds indexing for **[Keyman](https://keyman.com) keyboard source files (`.kmn`)**. It extracts keyboard `group`s (as callable units), user/system `store`s, `use()` call edges, and `outs`/`any`/`index` store references — so an AI assistant can trace how a keystroke flows through a keyboard's groups, and what each group depends on, without reading entire `.kmn` files. Everything else is upstream CodeGraph, unchanged. See the **Keyman** row under [Supported Languages](#supported-languages).
+> **🔱 Fork notice — adds Keyman support.** This is a personal fork of [CodeGraph](https://github.com/colbymchenry/codegraph) that adds indexing for the **[Keyman](https://keyman.com) keyboard ecosystem** (developed by SIL). It indexes all five Keyman source formats under one `keyman` language: keyboard rules (`.kmn`), touch/mobile layouts (`.keyman-touch-layout`), package manifests (`.kps`), visual keyboards (`.kvks`), and catalog metadata (`.keyboard_info`). From `.kmn` it extracts `group`s (as callable units), user/system `store`s, `use()` call edges, and store references; and it links a keyboard's files into one **cross-file subgraph** — `.kps → .kmn → {touch-layout, visual-keyboard}` — plus per-keyboard language coverage and package-to-package relations. So an AI assistant can trace how a keystroke flows through a keyboard, see which files make up a keyboard and how they relate, and answer *"which keyboards support language X"* — without opening every file. Everything else is upstream CodeGraph, unchanged. See the **Keyman** row under [Supported Languages](#supported-languages).
 
 ---
 
@@ -639,7 +639,7 @@ is written):
 | Pascal / Delphi | `.pas`, `.dpr`, `.dpk`, `.lpr` | Full support (classes, records, interfaces, enums, DFM/FMX form files) |
 | Lua | `.lua` | Full support (functions, methods with receivers, local variables, `require` imports, call edges) |
 | Luau | `.luau` | Full support (everything in Lua, plus `type`/`export type` aliases, typed signatures, and Roblox instance-path `require`) |
-| Keyman | `.kmn` | Full support (groups as functions, user/system stores, `use()` call edges, `outs`/`any`/`index` store references) |
+| Keyman | `.kmn`, `.keyman-touch-layout`, `.kps`, `.kvks`, `.keyboard_info` | Full support — `.kmn` groups/stores/`use()` call edges/store references; touch-layout layers + `nextlayer` transitions; `.kps` package manifest; `.kvks` visual keyboard; `.keyboard_info` language coverage. Files are cross-linked into one subgraph (`.kps → .kmn → touch-layout/visual-keyboard`), with per-keyboard language coverage and package-to-package relations |
 
 ## Troubleshooting
 
