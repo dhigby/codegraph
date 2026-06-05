@@ -12,9 +12,8 @@
 
 ### [Documentation & Website →](https://colbymchenry.github.io/codegraph/)
 
-[![npm version](https://img.shields.io/npm/v/@colbymchenry/codegraph.svg)](https://www.npmjs.com/package/@colbymchenry/codegraph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Self-contained](https://img.shields.io/badge/Node.js-bundled%20%C2%B7%20none%20required-brightgreen.svg)](https://nodejs.org/)
+[![Build from source](https://img.shields.io/badge/install-from%20source%20%C2%B7%20Node.js%2020%2B-brightgreen.svg)](#get-started)
 
 [![Windows](https://img.shields.io/badge/Windows-supported-blue.svg)](#supported-platforms)
 [![macOS](https://img.shields.io/badge/macOS-supported-blue.svg)](#supported-platforms)
@@ -41,35 +40,31 @@
 
 ## Get Started
 
-### 1. Install the CLI
+> **This fork installs from source.** It is **not** published to npm or as a downloadable release, so the upstream one-liners (`curl … install.sh`, `npm i -g @colbymchenry/codegraph`) would install the *original* project without Keyman support — not this fork. Clone, build, and link it as below instead.
 
-**No Node.js required** — one command grabs the right build for your OS:
+### 1. Build and link the CLI
 
-```bash
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh
-
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex
-```
-
-Already have Node? Use npm instead (works on any version):
+You'll need **Node.js 20+** (`<25`). Clone the fork, install its build dependencies, compile it, and put `codegraph` on your PATH:
 
 ```bash
-npm i -g @colbymchenry/codegraph
+git clone https://github.com/dhigby/codegraph.git
+cd codegraph
+npm install        # install build dependencies
+npm run build      # compile TypeScript to dist/
+npm link           # put this build's `codegraph` on your PATH
 ```
 
-<sub>CodeGraph bundles its own runtime — nothing to compile, no native build, works the same everywhere. The installer puts `codegraph` on your PATH but **doesn't change your current shell** — open a new terminal before the next step so the command resolves.</sub>
+<sub>`npm link` symlinks this build's `codegraph` binary into your global npm bin, so the command resolves anywhere. **To update later:** `git pull` in this directory and re-run `npm run build` — the linked command picks up the new build automatically, no re-link needed. (Don't want a global link? Skip `npm link` and run `node /path/to/codegraph/dist/bin/codegraph.js …` everywhere these docs say `codegraph` — but note the agent wiring in step 2 writes a config that launches the bare `codegraph` command, so the link is the smoother path.)</sub>
 
 ### 2. Wire up your agent(s)
 
-In a **new terminal**, run the installer to connect CodeGraph to the agents you use:
+From any terminal where the linked `codegraph` resolves, run the installer to connect CodeGraph to the agents you use:
 
 ```bash
 codegraph install
 ```
 
-<sub>Detects and auto-configures Claude Code, Cursor, Codex CLI, opencode, Hermes Agent, Gemini CLI, Antigravity IDE, and Kiro — wiring the CodeGraph MCP server into each. **This is the step that connects CodeGraph to your agent;** installing the CLI in step 1 does not do it on its own. (Shortcut: `npx @colbymchenry/codegraph` downloads and runs this in one go.)</sub>
+<sub>Detects and auto-configures Claude Code, Cursor, Codex CLI, opencode, Hermes Agent, Gemini CLI, Antigravity IDE, and Kiro — wiring the CodeGraph MCP server into each (the MCP config launches the `codegraph` command linked in step 1). **This is the step that connects CodeGraph to your agent;** building the CLI in step 1 does not do it on its own.</sub>
 
 ### 3. Initialize each project
 
@@ -317,8 +312,10 @@ Each bridge emits edges tagged `provenance:'heuristic'` with `metadata.synthesiz
 
 ### 1. Run the Installer
 
+After building and linking the CLI from source (see [Get Started](#get-started)):
+
 ```bash
-npx @colbymchenry/codegraph
+codegraph install
 ```
 
 The installer will:
@@ -364,9 +361,10 @@ That's it — your agent will use CodeGraph tools automatically when a `.codegra
 <details>
 <summary><strong>Manual Setup (Alternative)</strong></summary>
 
-**Install globally:**
+**Build and link from source** (see [Get Started](#get-started)):
 ```bash
-npm install -g @colbymchenry/codegraph
+git clone https://github.com/dhigby/codegraph.git
+cd codegraph && npm install && npm run build && npm link
 ```
 
 **Add to `~/.claude.json`:**
@@ -520,9 +518,15 @@ When running as an MCP server, CodeGraph exposes these tools to Claude Code:
 
 ## Library Usage
 
-CodeGraph can be embedded directly. The npm package re-exports its programmatic
-API, so both `import` and `require` resolve the `CodeGraph` class in your own
-process — handy for embedding it in an app (e.g. an Electron main process).
+CodeGraph can be embedded directly — it re-exports its programmatic API, so both
+`import` and `require` resolve the `CodeGraph` class in your own process — handy
+for embedding it in an app (e.g. an Electron main process).
+
+> Since this fork isn't published to npm, depend on your local build instead of a
+> registry install: run `npm link` in your clone and `npm link @colbymchenry/codegraph`
+> in the consuming project, or add it as a path dependency
+> (`"@colbymchenry/codegraph": "file:../codegraph"`). The import specifier stays
+> `@colbymchenry/codegraph` (the package name is unchanged in the fork).
 
 ```typescript
 import CodeGraph from '@colbymchenry/codegraph';
@@ -552,9 +556,8 @@ that drive the graph directly: `DatabaseConnection`, `QueryBuilder`,
 
 **Embedding requirements**
 
-- Install from npm (`npm i @colbymchenry/codegraph`) so the matching
-  per-platform package — which carries the compiled library and its
-  dependencies — is fetched alongside the shim.
+- Build the fork (`npm install && npm run build` in your clone) and link or
+  path-depend on it as above — the compiled library lives in `dist/`.
 - The API runs on **your** runtime, so it needs **Node 22.5+** for the built-in
   `node:sqlite` (Electron qualifies when its bundled Node is 22.5+). The CLI and
   MCP server are unaffected — they run on the self-contained bundled runtime.
@@ -649,7 +652,7 @@ is written):
 
 **MCP hits `database is locked`** — current builds shouldn't: CodeGraph bundles its own Node runtime and uses Node's built-in `node:sqlite` in WAL mode, where concurrent reads never block on a writer. If you still see it:
 
-- **You're on an old (pre-0.9) install.** Reinstall to get the bundled runtime — `curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh` (macOS/Linux), `irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex` (Windows), or `npm i -g @colbymchenry/codegraph@latest`.
+- **Your build is stale.** Pull and rebuild this fork — `git pull && npm run build` in your clone (the linked `codegraph` picks up the new build automatically).
 - **`codegraph status` shows `Journal:` other than `wal`** — WAL couldn't be enabled on this filesystem (common on network shares and WSL2 `/mnt`), so reads can block on writes. Move the project (with its `.codegraph/` folder) onto a local disk.
 
 **MCP server not connecting** — Ensure the project is initialized/indexed, verify the path in your MCP config, and check that `codegraph serve --mcp` works from the command line.
@@ -676,6 +679,6 @@ MIT
 
 **Made for AI coding agents — Claude Code, Cursor, Codex CLI, opencode, Hermes Agent, Gemini CLI, Antigravity IDE, and Kiro**
 
-[Report Bug](https://github.com/colbymchenry/codegraph/issues) · [Request Feature](https://github.com/colbymchenry/codegraph/issues)
+[Report Bug](https://github.com/dhigby/codegraph/issues) · [Request Feature](https://github.com/dhigby/codegraph/issues)
 
 </div>
