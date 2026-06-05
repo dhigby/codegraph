@@ -1,3 +1,7 @@
+> **🔱 Fork notice — adds Keyman support.** This is a personal fork of [CodeGraph](https://github.com/colbymchenry/codegraph) that adds indexing for **[Keyman](https://keyman.com) keyboard source files (`.kmn`)**. It extracts keyboard `group`s (as callable units), user/system `store`s, `use()` call edges, and `outs`/`any`/`index` store references — so an AI assistant can trace how a keystroke flows through a keyboard's groups, and what each group depends on, without reading entire `.kmn` files. Everything else is upstream CodeGraph, unchanged. See the **Keyman** row under [Supported Languages](#supported-languages).
+
+---
+
 <div align="center">
 
 # CodeGraph
