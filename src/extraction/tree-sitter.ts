@@ -21,6 +21,8 @@ import type { LanguageExtractor, ExtractorContext } from './tree-sitter-types';
 import { EXTRACTORS } from './languages';
 import { LiquidExtractor } from './liquid-extractor';
 import { KeymanExtractor } from './keyman-extractor';
+import { KeymanTouchLayoutExtractor } from './keyman-touch-layout-extractor';
+import { KeymanKpsExtractor } from './keyman-kps-extractor';
 import { SvelteExtractor } from './svelte-extractor';
 import { DfmExtractor } from './dfm-extractor';
 import { VueExtractor } from './vue-extractor';
@@ -3192,9 +3194,16 @@ export function extractFromSource(
     const extractor = new LiquidExtractor(filePath, source);
     result = extractor.extract();
   } else if (detectedLanguage === 'keyman') {
-    // Use custom extractor for Keyman keyboard source (.kmn) — no tree-sitter grammar.
-    const extractor = new KeymanExtractor(filePath, source);
-    result = extractor.extract();
+    // Keyman has several source formats sharing one language token; dispatch by
+    // extension to the right custom extractor (no tree-sitter grammar exists).
+    const lower = filePath.toLowerCase();
+    if (lower.endsWith('.keyman-touch-layout')) {
+      result = new KeymanTouchLayoutExtractor(filePath, source).extract();
+    } else if (lower.endsWith('.kps')) {
+      result = new KeymanKpsExtractor(filePath, source).extract();
+    } else {
+      result = new KeymanExtractor(filePath, source).extract();
+    }
   } else if (detectedLanguage === 'xml') {
     // Custom extractor for MyBatis mapper XML. Non-mapper XML returns just a
     // file node so the watcher tracks it without emitting symbols.

@@ -101,9 +101,14 @@ export const EXTENSION_MAP: Record<string, Language> = {
   '.luau': 'luau',
   '.m': 'objc',
   '.mm': 'objc',
-  // Keyman keyboard source (SIL). Custom line-based extractor (no tree-sitter
-  // grammar exists); see keyman-extractor.ts.
+  // Keyman keyboard formats (SIL). Custom extractors (no tree-sitter grammar
+  // exists), dispatched by extension in tree-sitter.ts: keyboard rules
+  // (keyman-extractor.ts), touch/mobile layout JSON
+  // (keyman-touch-layout-extractor.ts), and package manifest XML
+  // (keyman-kps-extractor.ts).
   '.kmn': 'keyman',
+  '.keyman-touch-layout': 'keyman',
+  '.kps': 'keyman',
   // XML: file-level tracking; the MyBatis extractor matches `<mapper namespace="...">`
   // shape and emits SQL-statement nodes (other XML returns empty).
   '.xml': 'xml',

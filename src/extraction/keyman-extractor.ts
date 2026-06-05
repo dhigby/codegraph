@@ -28,9 +28,14 @@ import { generateNodeId } from './tree-sitter-helpers';
  *   - `contains` edges file → group / store.
  *   - `calls` edges group → group for `use(...)` (and file → group for `begin`).
  *   - `references` edges group → store (and store → store) for `outs/any/...`.
+ *   - `references` unresolved edges file → companion file for the file-valued
+ *     system stores `&LAYOUTFILE` (.keyman-touch-layout) and `&VISUALKEYBOARD`
+ *     (.kvks). These connect a keyboard's parts across files (resolved by the
+ *     reference resolver's file-path matcher).
  *
- * Groups and stores are file-local in a keyboard, so references are resolved
- * directly into edges in a second pass (no cross-file unresolved references).
+ * Groups and stores are file-local in a keyboard, so intra-file references are
+ * resolved directly into edges in a second pass; only the companion-file links
+ * are emitted as unresolved references for cross-file resolution.
  */
 
 /** A logical line: physical lines joined across `\` continuations, comments stripped. */
@@ -80,6 +85,10 @@ export class KeymanExtractor {
 
       // Pass 2 — resolve calls (use) and store references (outs/any/index/…).
       this.resolveReferences(logical, fileNode, groupMap, storeMap);
+
+      // Cross-file: link the keyboard to its companion files (touch layout,
+      // visual keyboard) named by file-valued system stores.
+      this.emitCompanionFileRefs(fileNode);
     } catch (error) {
       this.errors.push({
         message: `Keyman extraction error: ${error instanceof Error ? error.message : String(error)}`,
@@ -309,6 +318,35 @@ export class KeymanExtractor {
     }
   }
 
+  /**
+   * Emit cross-file `references` for the file-valued system stores that name a
+   * keyboard's companion source files: `&LAYOUTFILE` (the touch layout) and
+   * `&VISUALKEYBOARD` (the on-screen keyboard). The reference is the companion's
+   * path resolved against the `.kmn`'s own directory, so the resolver's
+   * file-path matcher links it to the indexed companion file node. Asset stores
+   * like `&BITMAP` (icons) and help files are skipped — they aren't indexed, so
+   * a reference to them would never resolve.
+   */
+  private emitCompanionFileRefs(fileNode: Node): void {
+    const re = /\bstore\s*\(\s*&(LAYOUTFILE|VISUALKEYBOARD)\s*\)\s*(['"])([^'"]+)\2/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(this.source)) !== null) {
+      const value = m[3]!.trim();
+      if (!value) continue;
+      const referenceName = resolveCompanionPath(this.filePath, value);
+      const line = lineOfIndex(this.source, m.index);
+      this.unresolvedReferences.push({
+        fromNodeId: fileNode.id,
+        referenceName,
+        referenceKind: 'references',
+        line,
+        column: 0,
+        filePath: this.filePath,
+        language: 'keyman',
+      });
+    }
+  }
+
   private addEdge(source: string, target: string, kind: Edge['kind'], line?: number): void {
     const key = `${source}|${target}|${kind}`;
     if (this.seenEdges.has(key)) return;
@@ -356,4 +394,36 @@ function stripKeymanComment(line: string): string {
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+/** 1-indexed physical line containing byte offset `index` in `source`. */
+function lineOfIndex(source: string, index: number): number {
+  let line = 1;
+  for (let i = 0; i < index && i < source.length; i++) {
+    if (source[i] === '\n') line++;
+  }
+  return line;
+}
+
+/**
+ * Resolve a companion-file path (from a `.kmn` system store) against the
+ * keyboard's own directory, normalized to forward slashes. Keyman companion
+ * files normally sit alongside the `.kmn` (a bare filename), but a value may
+ * carry `..`/sub-path segments — those are resolved relative to the directory.
+ * The result includes a `/` so the resolver's path matcher engages.
+ */
+function resolveCompanionPath(kmnPath: string, value: string): string {
+  const normPath = kmnPath.replace(/\\/g, '/');
+  const v = value.replace(/\\/g, '/');
+  const slash = normPath.lastIndexOf('/');
+  const dir = slash >= 0 ? normPath.slice(0, slash) : '';
+  if (!dir) return v;
+
+  const segments = dir.split('/');
+  for (const seg of v.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') segments.pop();
+    else segments.push(seg);
+  }
+  return segments.join('/');
 }

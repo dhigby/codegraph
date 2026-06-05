@@ -103,6 +103,8 @@ describe('Language Detection', () => {
 
   it('should detect Keyman keyboard files', () => {
     expect(detectLanguage('khmer_angkor.kmn')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.keyman-touch-layout')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.kps')).toBe('keyman');
   });
 
   it('should return unknown for unsupported extensions', () => {
@@ -753,6 +755,129 @@ group(g) using keys
     expect(result.nodes.find((n) => n.name === 'fake')).toBeUndefined();
     expect(result.nodes.find((n) => n.name === '&layer')).toBeUndefined();
     expect(result.nodes.find((n) => n.kind === 'variable' && n.name === 'real')).toBeDefined();
+  });
+
+  it('should emit cross-file references from &LAYOUTFILE / &VISUALKEYBOARD to companion files', () => {
+    const code = `store(&NAME) 'Khmer'
+store(&LAYOUTFILE) 'khmer.keyman-touch-layout'
+store(&VISUALKEYBOARD) 'khmer.kvks'
+store(&BITMAP) 'khmer.ico'
+begin Unicode > use(main)
+group(main) using keys
+  + 'a' > 'b'
+`;
+    const result = extractFromSource('release/k/khmer/source/khmer.kmn', code);
+    const refNames = result.unresolvedReferences
+      .filter((r) => r.referenceKind === 'references')
+      .map((r) => r.referenceName);
+    // Companion files are resolved against the .kmn's own directory (so the
+    // resolver's file-path matcher engages); icons are NOT linked.
+    expect(refNames).toContain('release/k/khmer/source/khmer.keyman-touch-layout');
+    expect(refNames).toContain('release/k/khmer/source/khmer.kvks');
+    expect(refNames.some((n) => n.endsWith('.ico'))).toBe(false);
+  });
+});
+
+describe('Keyman Touch Layout Extraction', () => {
+  const layout = JSON.stringify({
+    phone: {
+      font: 'Khmer',
+      layer: [
+        {
+          id: 'default',
+          row: [
+            { id: 1, key: [{ id: 'K_Q', text: 'q' }, { id: 'K_SHIFT', text: '*Shift*', nextlayer: 'shift' }] },
+          ],
+        },
+        {
+          id: 'shift',
+          row: [
+            { id: 1, key: [{ id: 'K_Q', text: 'Q', sk: [{ id: 'T_1', text: '@', nextlayer: 'symbol' }] }] },
+          ],
+        },
+        { id: 'symbol', row: [{ id: 1, key: [{ id: 'K_BKSP', text: '*BkSp*' }] }] },
+      ],
+    },
+    tablet: {
+      layer: [{ id: 'default', row: [{ id: 1, key: [{ id: 'K_A', text: 'a' }] }] }],
+    },
+  });
+
+  it('should detect keyman via extractFromSource for .keyman-touch-layout', () => {
+    const result = extractFromSource('khmer.keyman-touch-layout', layout);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    expect(result.nodes.find((n) => n.kind === 'file')?.language).toBe('keyman');
+  });
+
+  it('should emit a component node per layer, scoped by platform', () => {
+    const result = extractFromSource('khmer.keyman-touch-layout', layout);
+    const layers = result.nodes.filter((n) => n.kind === 'component');
+    // phone: default/shift/symbol + tablet: default
+    expect(layers.map((n) => n.qualifiedName).sort()).toEqual([
+      'khmer.keyman-touch-layout::phone:default',
+      'khmer.keyman-touch-layout::phone:shift',
+      'khmer.keyman-touch-layout::phone:symbol',
+      'khmer.keyman-touch-layout::tablet:default',
+    ]);
+    expect(layers.find((n) => n.qualifiedName.endsWith('phone:default'))?.name).toBe('default');
+  });
+
+  it('should link layers via nextlayer (including subkeys), within the same platform', () => {
+    const result = extractFromSource('khmer.keyman-touch-layout', layout);
+    const byId = new Map(result.nodes.map((n) => [n.id, n]));
+    const refs = result.edges
+      .filter((e) => e.kind === 'references')
+      .map((e) => `${byId.get(e.source)?.qualifiedName}->${byId.get(e.target)?.qualifiedName}`)
+      .sort();
+    expect(refs).toContain('khmer.keyman-touch-layout::phone:default->khmer.keyman-touch-layout::phone:shift');
+    // sk[].nextlayer is followed too
+    expect(refs).toContain('khmer.keyman-touch-layout::phone:shift->khmer.keyman-touch-layout::phone:symbol');
+  });
+
+  it('should not throw on malformed JSON, reporting a parse error instead', () => {
+    const result = extractFromSource('bad.keyman-touch-layout', '{ not json');
+    expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
+    expect(result.errors.some((e) => e.severity === 'error')).toBe(true);
+  });
+});
+
+describe('Keyman Package (.kps) Extraction', () => {
+  const kps = `<?xml version="1.0" encoding="utf-8"?>
+<Package>
+  <Info>
+    <Name URL="">Khmer Angkor</Name>
+    <Author URL="mailto:a@b.org">Someone</Author>
+  </Info>
+  <Files>
+    <File><Name>..\\build\\khmer.js</Name><FileType>.js</FileType></File>
+    <File><Name>khmer.keyman-touch-layout</Name><FileType>.keyman-touch-layout</FileType></File>
+    <File><Name>..\\..\\shared\\fonts\\Foo.ttf</Name><FileType>.ttf</FileType></File>
+  </Files>
+  <Keyboards>
+    <Keyboard>
+      <ID>khmer</ID>
+      <Languages><Language ID="km">Khmer</Language></Languages>
+    </Keyboard>
+  </Keyboards>
+</Package>`;
+
+  it('should detect keyman and capture the package name as docstring', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    const file = result.nodes.find((n) => n.kind === 'file');
+    expect(file?.language).toBe('keyman');
+    expect(file?.docstring).toBe('Khmer Angkor');
+  });
+
+  it('should link the package to its keyboard .kmn and shipped source companions', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    const refNames = result.unresolvedReferences.map((r) => r.referenceName).sort();
+    // Keyboard <ID> → its .kmn, resolved against the .kps directory.
+    expect(refNames).toContain('release/k/khmer/source/khmer.kmn');
+    // Shipped keyboard-source companion is linked; build outputs and fonts are not.
+    expect(refNames).toContain('release/k/khmer/source/khmer.keyman-touch-layout');
+    expect(refNames.some((n) => n.endsWith('.js'))).toBe(false);
+    expect(refNames.some((n) => n.endsWith('.ttf'))).toBe(false);
   });
 });
 
