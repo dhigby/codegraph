@@ -24,6 +24,7 @@ import { KeymanExtractor } from './keyman-extractor';
 import { KeymanTouchLayoutExtractor } from './keyman-touch-layout-extractor';
 import { KeymanKpsExtractor } from './keyman-kps-extractor';
 import { KeymanKvksExtractor } from './keyman-kvks-extractor';
+import { KeymanKeyboardInfoExtractor } from './keyman-keyboard-info-extractor';
 import { SvelteExtractor } from './svelte-extractor';
 import { DfmExtractor } from './dfm-extractor';
 import { VueExtractor } from './vue-extractor';
@@ -3204,6 +3205,8 @@ export function extractFromSource(
       result = new KeymanKpsExtractor(filePath, source).extract();
     } else if (lower.endsWith('.kvks')) {
       result = new KeymanKvksExtractor(filePath, source).extract();
+    } else if (lower.endsWith('.keyboard_info')) {
+      result = new KeymanKeyboardInfoExtractor(filePath, source).extract();
     } else {
       result = new KeymanExtractor(filePath, source).extract();
     }

@@ -1,5 +1,6 @@
-import { Node, ExtractionResult, ExtractionError, UnresolvedReference } from '../types';
+import { Node, Edge, ExtractionResult, ExtractionError, UnresolvedReference } from '../types';
 import { generateNodeId } from './tree-sitter-helpers';
+import { buildLanguageNode } from './keyman-shared';
 
 /**
  * KeymanKpsExtractor — extracts the package manifest from Keyman package-source
@@ -14,6 +15,11 @@ import { generateNodeId } from './tree-sitter-helpers';
  *
  * What we emit:
  *   - `file` node for the package (docstring = the package's display name).
+ *   - `constant` node per supported language (from `<Keyboard><Languages>
+ *     <Language ID="…">`), plus `contains` file → language. This is the
+ *     release/experimental equivalent of a legacy keyboard's `.keyboard_info`
+ *     `languages` map — so "which keyboards support language X" is queryable
+ *     uniformly across the whole repo (see keyman-shared.ts).
  *   - `references` (unresolved, cross-file) from the package to each keyboard's
  *     `<id>.kmn` source, resolved against the `.kps`'s own directory.
  *   - `references` (unresolved) to any shipped keyboard-source companion file
@@ -29,9 +35,11 @@ export class KeymanKpsExtractor {
   private filePath: string;
   private source: string;
   private nodes: Node[] = [];
+  private edges: Edge[] = [];
   private unresolvedReferences: UnresolvedReference[] = [];
   private errors: ExtractionError[] = [];
   private seenRefs = new Set<string>();
+  private seenLangs = new Set<string>();
 
   constructor(filePath: string, source: string) {
     this.filePath = filePath;
@@ -44,7 +52,8 @@ export class KeymanKpsExtractor {
     try {
       const fileNode = this.createFileNode();
 
-      // Keyboard ids → their `.kmn` source (the primary package → keyboard link).
+      // Keyboard ids → their `.kmn` source (the primary package → keyboard link),
+      // and the languages each keyboard supports.
       const keyboardsBlock = findBlock(this.source, 'Keyboards');
       if (keyboardsBlock) {
         const re = /<ID>\s*([^<]+?)\s*<\/ID>/gi;
@@ -54,6 +63,13 @@ export class KeymanKpsExtractor {
           if (!id) continue;
           const abs = keyboardsBlock.offset + m.index;
           this.addRef(fileNode.id, resolvePackagePath(this.filePath, `${id}.kmn`), abs);
+        }
+
+        const langRe = /<Language\b[^>]*\bID\s*=\s*"([^"]+)"[^>]*>\s*([\s\S]*?)\s*<\/Language>/gi;
+        while ((m = langRe.exec(keyboardsBlock.content)) !== null) {
+          const tag = m[1]!.trim();
+          const displayName = decodeEntities(m[2]!.replace(/<[^>]*>/g, '').trim());
+          this.addLanguage(fileNode, tag, displayName);
         }
       }
 
@@ -80,11 +96,19 @@ export class KeymanKpsExtractor {
 
     return {
       nodes: this.nodes,
-      edges: [],
+      edges: this.edges,
       unresolvedReferences: this.unresolvedReferences,
       errors: this.errors,
       durationMs: Date.now() - startTime,
     };
+  }
+
+  private addLanguage(fileNode: Node, tag: string, displayName: string): void {
+    if (!tag || this.seenLangs.has(tag)) return; // first definition wins
+    this.seenLangs.add(tag);
+    const node = buildLanguageNode(this.filePath, tag, displayName || undefined, this.seenLangs.size);
+    this.nodes.push(node);
+    this.edges.push({ source: fileNode.id, target: node.id, kind: 'contains', provenance: 'tree-sitter' });
   }
 
   private createFileNode(): Node {

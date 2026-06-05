@@ -106,6 +106,7 @@ describe('Language Detection', () => {
     expect(detectLanguage('khmer_angkor.keyman-touch-layout')).toBe('keyman');
     expect(detectLanguage('khmer_angkor.kps')).toBe('keyman');
     expect(detectLanguage('khmer_angkor.kvks')).toBe('keyman');
+    expect(detectLanguage('khmer_angkor.keyboard_info')).toBe('keyman');
   });
 
   it('should return unknown for unsupported extensions', () => {
@@ -880,6 +881,16 @@ describe('Keyman Package (.kps) Extraction', () => {
     expect(refNames.some((n) => n.endsWith('.js'))).toBe(false);
     expect(refNames.some((n) => n.endsWith('.ttf'))).toBe(false);
   });
+
+  it('should emit a language node per <Language ID> with the display name searchable', () => {
+    const result = extractFromSource('release/k/khmer/source/khmer.kps', kps);
+    const langs = result.nodes.filter((n) => n.kind === 'constant');
+    expect(langs.map((n) => n.name)).toEqual(['km']);
+    expect(langs[0]?.signature).toContain('Khmer');
+    // file → language contains edge
+    const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
+    expect(result.edges.some((e) => e.kind === 'contains' && e.source === fileId && e.target === langs[0]!.id)).toBe(true);
+  });
 });
 
 describe('Keyman Visual Keyboard (.kvks) Extraction', () => {
@@ -932,6 +943,49 @@ describe('Keyman Visual Keyboard (.kvks) Extraction', () => {
     const result = extractFromSource('bad.kvks', '<visualkeyboard><encoding');
     expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
     expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+  });
+});
+
+describe('Keyman Keyboard Info (.keyboard_info) Extraction', () => {
+  const info = JSON.stringify({
+    id: 'blackfoot_syllabics_u',
+    name: 'Blackfoot Syllabics',
+    languages: {
+      alq: { displayName: 'Algonquin', languageName: 'Algonquin' },
+      bla: { displayName: 'Siksika', languageName: 'Siksika' },
+    },
+  });
+
+  it('should detect keyman and capture the display name as docstring', () => {
+    const result = extractFromSource('legacy/b/blackfoot/blackfoot.keyboard_info', info);
+    expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+    const file = result.nodes.find((n) => n.kind === 'file');
+    expect(file?.language).toBe('keyman');
+    expect(file?.docstring).toBe('Blackfoot Syllabics');
+  });
+
+  it('should emit a language node per supported language, matching the .kps shape', () => {
+    const result = extractFromSource('legacy/b/blackfoot/blackfoot.keyboard_info', info);
+    const langs = result.nodes.filter((n) => n.kind === 'constant');
+    expect(langs.map((n) => n.name).sort()).toEqual(['alq', 'bla']);
+    expect(langs.find((n) => n.name === 'bla')?.signature).toContain('Siksika');
+    const fileId = result.nodes.find((n) => n.kind === 'file')!.id;
+    expect(result.edges.filter((e) => e.kind === 'contains' && e.source === fileId)).toHaveLength(2);
+  });
+
+  it('should handle the empty-languages and bare-array shapes without error', () => {
+    const empty = extractFromSource('a.keyboard_info', JSON.stringify({ name: 'A', languages: {} }));
+    expect(empty.nodes.filter((n) => n.kind === 'constant')).toHaveLength(0);
+    expect(empty.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+
+    const arr = extractFromSource('b.keyboard_info', JSON.stringify({ name: 'B', languages: ['en', 'fr'] }));
+    expect(arr.nodes.filter((n) => n.kind === 'constant').map((n) => n.name).sort()).toEqual(['en', 'fr']);
+  });
+
+  it('should report a parse error on malformed JSON', () => {
+    const result = extractFromSource('bad.keyboard_info', '{ not json');
+    expect(result.nodes.find((n) => n.kind === 'file')).toBeDefined();
+    expect(result.errors.some((e) => e.severity === 'error')).toBe(true);
   });
 });
 

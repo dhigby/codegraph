@@ -4,7 +4,7 @@ This fork adds Keyman keyboard-source (`.kmn`) indexing to CodeGraph. This doc
 lists the **other Keyman file formats** that are good candidates for future
 extractors, ranked by how much they'd add to the knowledge graph.
 
-Current state: three Keyman formats are wired, all under the one `keyman`
+Current state: five Keyman formats are wired, all under the one `keyman`
 language token (dispatched by extension in `src/extraction/tree-sitter.ts`):
 
 - **`.kmn`** (`keyman-extractor.ts`) — `group`s (as functions), user/system
@@ -17,19 +17,30 @@ language token (dispatched by extension in `src/extraction/tree-sitter.ts`):
   flicks / multitaps), resolved within the same platform. Keys are not emitted
   as nodes (would explode the graph for little structural value).
 - **`.kps`** (`keyman-kps-extractor.ts`) — the package manifest. File node with
-  the package display name as docstring, and cross-file `references` to each
+  the package display name as docstring, cross-file `references` to each
   `<Keyboard><ID>`'s `.kmn` source plus any shipped keyboard-source companion
-  (`.kmn` / `.keyman-touch-layout` / `.kvks`); build outputs, fonts, and docs
-  are skipped (never indexed, so they'd never resolve).
+  (`.kmn` / `.keyman-touch-layout` / `.kvks`; build outputs, fonts, and docs are
+  skipped), and a `constant` node per supported language from `<Languages>
+  <Language ID="…">`.
 - **`.kvks`** (`keyman-kvks-extractor.ts`) — the on-screen (desktop) visual
   keyboard. File node (docstring = `<kbdname>`) and a `component` node per
   layer, scoped by encoding and decoded modifier state (`shift="RA"` →
   `rightalt`, `SRA` → `shift+rightalt`). No inter-layer edges (desktop modifier
   states aren't programmatic switches). Keys stay data, not nodes.
+- **`.keyboard_info`** (`keyman-keyboard-info-extractor.ts`) — catalog metadata
+  JSON. Only committed for **legacy** keyboards (for release/experimental it's a
+  build artifact generated from the `.kps`). File node (docstring = display
+  `name`) and a `constant` node per language from the `languages` map —
+  identical in shape to the `.kps` language nodes (shared via
+  `keyman-shared.ts`), so language coverage is queryable uniformly across the
+  whole repo.
 
 Together these connect `.kps → .kmn → {touch-layout, visual-keyboard}` into one
 navigable subgraph (validated end-to-end on `khmer_angkor` and `baybayin`:
 `.kps → .kmn`, and `.kmn → .keyman-touch-layout` / `.kmn → .kvks` all resolve).
+Language coverage is captured for every keyboard — from the `.kps` for
+release/experimental and the `.keyboard_info` for legacy — so a query like
+*"which keyboards support Tagalog"* returns matches from both lineages at once.
 
 ## Keyman source formats present in the keyboards repo
 
@@ -42,7 +53,7 @@ Counts from a scan of `keymanapp/keyboards` (`release` + `legacy` + `experimenta
 | `.keyman-touch-layout` | 952 | JSON | ✅ **done** | touch/mobile layout — `component` node per layer + `nextlayer` layer-transition edges |
 | `.kvks` | 947 | XML | ✅ **done** | on-screen (desktop) visual keyboard — file node + `component` node per modifier layer; lights up the `&VISUALKEYBOARD → .kvks` link from the `.kmn` |
 | `.kpj` | 1034 | XML | 🔸 low | project file — but modern ones are nearly empty (auto-discover files), so little to extract |
-| `.keyboard_info` | 555 | JSON | 🔸 low | catalog metadata (languages, author, version). Easy but low graph value |
+| `.keyboard_info` | 555 | JSON | ✅ **done** | catalog metadata — committed only for legacy keyboards; emits a `constant` node per supported language so legacy keyboards get the same language coverage `.kps` gives the rest |
 | `.xml` (LDML) | ~2 | XML | ❌ skip | the new CLDR keyboard standard — a genuine alt source language, but only ~2 in the repo; not worth it |
 | `.kmp` / `.kmx` / `.kvk` | 360 / 24 / 10 | binary | ❌ skip | compiled outputs |
 | `.png` `.ico` `.ttf` `.pdf` `.htm` `.md` `.php` | many | assets/docs | ❌ skip | not code |
@@ -75,15 +86,14 @@ each one.
 
 1. ✅ **`.kmn` cross-file edges** (enhance existing extractor) — biggest value, smallest effort.
 2. ✅ **`.keyman-touch-layout`** (JSON) — layer nodes + `nextlayer` transitions.
-3. ✅ **`.kps`** (XML manifest) — the connective tissue between a keyboard's files.
+3. ✅ **`.kps`** (XML manifest) — the connective tissue between a keyboard's files + language coverage.
 4. ✅ **`.kvks`** (XML visual keyboard) — file node + per-modifier layer nodes.
+5. ✅ **`.keyboard_info`** (JSON catalog metadata) — language coverage for legacy keyboards.
 
-`.keyboard_info` (catalog metadata) is the only remaining candidate, and it's
-low value. The four core source formats are now covered.
+All Keyman source formats present in the repo are now covered.
 
 ### Remaining work
 
-- **`.keyboard_info`** (JSON catalog metadata) — low graph value.
 - **`.kps` RelatedPackages** — `<RelatedPackage ID="…">` links one package to
   another by id. Not yet linked (the target lives in a different directory, so
   there's no path to resolve against); would need a package-id → `.kps` index.
